@@ -10,6 +10,7 @@
   const simulation = forceSimulation(data);
 
   $: {
+    simulation;
     simulation
       .force(
         "x",
@@ -20,10 +21,13 @@
       .force(
         "y",
         forceY()
-          .y((d) => yScale(d.continent))
+          .y((d) => (groupByContinent ? yScale(d.continent) : innerHeight / 2))
           .strength(0.2)
       )
-      .force("collide", forceCollide().radius(d => radiusScale(d.happiness)))
+      .force(
+        "collide",
+        forceCollide().radius((d) => radiusScale(d.happiness))
+      )
       .alpha(0.3)
       .alphaDecay(0.0005)
       .restart();
@@ -90,47 +94,84 @@
   import AxisY from "$components/AxisY.svelte";
 
   import Legend from "$components/Legend.svelte";
+
+  let hovered;
+  import Tooltip from "$components/Tooltip.svelte";
+  import { fade } from "svelte/transition";
+
+  let hoveredContinent;
+  // In addition to the other script logic...
+  //1.if user click on the screen all the circle get collapse or scartered
+  let groupByContinent = false;
 </script>
 
 <h1>The Happiest Countries Clients Of Weroute System</h1>
-<Legend {colorScale} />
-<div class="class-container" bind:clientWidth={width}>
-  <svg {width} {height}>
+<Legend {colorScale} bind:hoveredContinent />
+
+<!-- /* 2.if user click on the screen all the circle get collapse or scartered  onclick*/ -->
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<div
+  class="class-container"
+  bind:clientWidth={width}
+  on:click={() => {
+    groupByContinent = !groupByContinent;
+    hovered = null;
+  }}
+>
+  <svg
+    {width}
+    {height}
+    on:mouseleave={() => {
+      hovered = null;
+    }}
+  >
     <g class="inner-chart" transform="translate({margin.left}, {margin.top})">
-      <AxisX xScale={xScale} height={innerHeight} width = {innerWidth} />
-      <AxisY {yScale} />
-      {#each nodes as node}
+      <AxisX {xScale} height={innerHeight} width={innerWidth} />
+      <AxisY {yScale} {groupByContinent} />
+      {#if hovered}
+        <line
+          transition:fade
+          x1={hovered.x}
+          x2={hovered.x}
+          y1={innerHeight}
+          y2={hovered.y}
+          stroke={colorScale(hovered.continent)}
+          stroke-width="2"
+        />
+      {/if}
+      {#each nodes as node, index}
+        <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
         <circle
+        in:fade={{ delay: 200 + 10 * index, duration: 400 }}
           cx={node.x}
           cy={node.y}
           r={radiusScale(node.happiness)}
+          stroke={hovered || hoveredContinent
+            ? hovered === node || hoveredContinent === node.continent
+              ? "black"
+              : "transparent"
+            : "#00000090"}
           fill={colorScale(node.continent)}
-          stroke="black"
+          title={node.country}
+          opacity={hovered || hoveredContinent
+            ? hovered === node || hoveredContinent === node.continent
+              ? 1
+              : 0.3
+            : 1}
+          on:mouseover={() => (hovered = node)}
+          on:focus={() => (hovered = node)}
+          tabindex="0"
+          on:click={(e) => {
+            e.stopImmediatePropagation();
+        }}
         />
-      {/each}   
+      {/each}
     </g>
   </svg>
+  {#if hovered}
+    <Tooltip data={hovered} {colorScale} {width} />
+  {/if}
 </div>
-
-<style >
-  :global(.tick text) {
-    font-size: 12px;
-    font-weight: 400;
-    fill: hsla(212, 10%, 53%, 1);
-    user-select: none;
-  }
-
-  :global(.axis-title){
-      font-size: 14px;
-    }
-
-    h1 {
-    font-size: 22px;
-    margin-bottom: 6px;
-    font-weight: 600;
-    text-align: center;
-  }
-</style>
 
 <!-- <main>
   <h1>Let's make a chart 😎</h1>
@@ -192,3 +233,28 @@
     color: #333;
   }
 </style> -->
+
+<style>
+  :global(.tick text) {
+    font-size: 12px;
+    font-weight: 400;
+    fill: hsla(212, 10%, 53%, 1);
+    user-select: none;
+  }
+
+  :global(.axis-title) {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  circle {
+    transition: stroke 300ms ease, opacity 300ms ease;
+    cursor: pointer;
+  }
+</style>
